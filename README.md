@@ -75,12 +75,29 @@ const weight = ref<number | null>(null)
 
 ## 主题定制
 
-覆盖 `.vti-kb` 上的 CSS 变量即可换肤：
+### 快捷换肤：`accent` / `background` prop
+
+```vue
+<!-- 主色调换成橙色：完成键 / 高亮 / 派生色自动跟随 -->
+<SoftKeyboard accent="#ff5500" background="rgba(20, 16, 12, 0.97)" />
+```
+
+| Prop | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `instance` | `SoftKeyboardInstance` | 模块单例 | 自定义键盘实例（多键盘并存时用 `createSoftKeyboard()` 创建） |
+| `accent` | `string` | `#3ef2c0` | 主色调（完成键 / 高亮 / 派生色自动跟随） |
+| `background` | `string` | `rgba(7,20,24,0.97)` | 面板背景色 |
+
+### 细粒度：CSS 变量
+
+覆盖 `.vti-kb` 上的 CSS 变量即可（`--vti-accent-strong` 默认由 `--vti-accent`
+自动派生，一般无需单独覆盖）：
 
 ```css
 .vti-kb {
   --vti-accent: #3ef2c0;        /* 主色（高亮 / 完成键） */
-  --vti-accent-strong: #1d8a6e; /* 主色渐变暗端 */
+  --vti-accent-strong: color-mix(in srgb, var(--vti-accent) 72%, #000); /* 派生暗端 */
+  --vti-on-accent: #06241c;     /* 主色按键上的文字色 */
   --vti-bg: rgba(7, 20, 24, 0.97); /* 面板背景 */
   --vti-key-bg: linear-gradient(180deg, rgba(24, 56, 60, 0.95), rgba(13, 34, 38, 0.95));
   --vti-key-fg: #d7e2e0;        /* 按键文字 */
@@ -91,12 +108,6 @@ const weight = ref<number | null>(null)
 ```
 
 ## API
-
-### 组件 `<SoftKeyboard />`
-
-| Prop | 类型 | 默认值 | 说明 |
-| --- | --- | --- | --- |
-| `instance` | `SoftKeyboardInstance` | 模块单例 | 自定义键盘实例（多键盘并存时用 `createSoftKeyboard()` 创建） |
 
 ### 组合式
 

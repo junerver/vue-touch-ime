@@ -12,10 +12,11 @@
  * 拼音模式：字母进候选缓冲，空格/点候选上屏；数字/标点直接上屏。
  * 数字模式：decimal 类型出小数点，digits 类型不出。
  *
- * 主题：在 `.vti-kb` 上覆盖 CSS 变量即可（--vti-accent / --vti-bg /
- * --vti-key-h / --vti-key-radius / --vti-font 等）。
+ * 主题：`accent` / `background` prop 快捷换肤（派生色自动跟随），
+ * 其余细节覆盖 `.vti-kb` 上的 CSS 变量（--vti-key-h / --vti-key-radius /
+ * --vti-font 等）。
  */
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { softKeyboard, type SoftKeyboard } from './useSoftKeyboard'
 import type { SoftCandidate } from './ime'
@@ -23,6 +24,10 @@ import type { SoftCandidate } from './ime'
 const props = defineProps<{
   /** 自定义键盘实例（缺省用模块单例；多键盘并存时传入 createSoftKeyboard() 的产物） */
   instance?: SoftKeyboard
+  /** 主色调（覆盖 --vti-accent，完成键/高亮/派生色自动跟随） */
+  accent?: string
+  /** 面板背景色（覆盖 --vti-bg） */
+  background?: string
 }>()
 
 // 实例在挂载后不变，setup 期定死即可
@@ -30,6 +35,14 @@ const kb = props.instance ?? softKeyboard
 const rootRef = ref<HTMLElement | null>(null)
 /** 顶层绑定让模板自动解包（kb.candidates 是 ComputedRef，挂在对象上不会解包） */
 const candidates = kb.candidates
+
+/** 主题快捷换肤：把 prop 落到 CSS 变量上（派生变量引用 var(--vti-accent) 自动跟随） */
+const themeStyle = computed(() => {
+  const style: Record<string, string> = {}
+  if (props.accent) style['--vti-accent'] = props.accent
+  if (props.background) style['--vti-bg'] = props.background
+  return Object.keys(style).length > 0 ? style : undefined
+})
 
 onMounted(() => kb.attach(rootRef.value))
 onBeforeUnmount(() => kb.detach())
@@ -76,6 +89,7 @@ function backLabel(): string {
     ref="rootRef"
     class="vti-kb"
     :class="{ show: kb.state.visible }"
+    :style="themeStyle"
     @pointerdown="swallow"
     @mousedown="swallow"
     @touchstart="swallow"
@@ -235,9 +249,11 @@ function backLabel(): string {
 <style>
 /* 非 scoped：全部规则都锚在 .vti-kb 根类下，主题变量在根类上覆盖即可 */
 .vti-kb {
-  /* 主题变量（覆盖这些即可换肤） */
+  /* 主题变量（accent / background prop 或覆盖这些变量即可换肤） */
   --vti-accent: #3ef2c0;
-  --vti-accent-strong: #1d8a6e;
+  /* 派生色引用 --vti-accent，主色调一换自动跟随 */
+  --vti-accent-strong: color-mix(in srgb, var(--vti-accent) 72%, #000);
+  --vti-on-accent: #06241c;
   --vti-bg: rgba(7, 20, 24, 0.97);
   --vti-panel-border: rgba(62, 242, 192, 0.3);
   --vti-strip-bg: rgba(4, 13, 16, 0.85);
@@ -394,7 +410,7 @@ function backLabel(): string {
 .vti-kb__key--done {
   flex: 1.8;
   border-color: color-mix(in srgb, var(--vti-accent) 55%, transparent);
-  color: #06241c;
+  color: var(--vti-on-accent);
   background: linear-gradient(180deg, var(--vti-accent), var(--vti-accent-strong));
   font-size: 18px;
 }

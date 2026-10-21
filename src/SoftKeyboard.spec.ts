@@ -331,6 +331,22 @@ describe('SoftKeyboard.vue · 组件', () => {
     custom.detach()
   })
 
+  it('accent / background prop 落到 CSS 变量（快捷换肤）', async () => {
+    const wrapper = mount(SoftKeyboardVue, {
+      attachTo: document.body,
+      props: { accent: '#ff5500', background: 'rgba(0,0,0,0.9)' },
+    })
+    expect(wrapper.element.style.getPropertyValue('--vti-accent')).toBe('#ff5500')
+    expect(wrapper.element.style.getPropertyValue('--vti-bg')).toBe('rgba(0,0,0,0.9)')
+    wrapper.unmount()
+  })
+
+  it('不传主题 prop 时不写内联样式（沿用 CSS 默认主题）', async () => {
+    const wrapper = mount(SoftKeyboardVue, { attachTo: document.body })
+    expect(wrapper.attributes('style')).toBeUndefined()
+    wrapper.unmount()
+  })
+
   it('卸载后不再接管焦点', async () => {
     const wrapper = mount(SoftKeyboardVue, { attachTo: document.body })
     wrapper.unmount()

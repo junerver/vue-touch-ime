@@ -13,12 +13,29 @@ const weight = ref<number | null>(null)
 const age = ref<number | null>(null)
 const code = ref('')
 const note = ref('')
+
+/** 主色调快捷换肤演示 */
+const ACCENTS = ['#3ef2c0', '#ff5500', '#4a9eff', '#f43f5e', '#a78bfa']
+const accent = ref(ACCENTS[0])
 </script>
 
 <template>
   <main class="demo">
     <h1>vue-touch-ime</h1>
     <p class="sub">聚焦任意输入框 → 触摸软键盘自动弹出（中文拼音 / 英文 / 数字）</p>
+
+    <div class="accents">
+      <span>主色调：</span>
+      <button
+        v-for="c in ACCENTS"
+        :key="c"
+        type="button"
+        class="swatch"
+        :class="{ cur: accent === c }"
+        :style="{ background: c }"
+        @click="accent = c"
+      />
+    </div>
 
     <label>
       <span>名称（拼音输入）</span>
@@ -50,7 +67,7 @@ const note = ref('')
       <em>{{ note }}</em>
     </label>
 
-    <SoftKeyboard />
+    <SoftKeyboard :accent="accent" />
   </main>
 </template>
 
@@ -67,9 +84,27 @@ h1 {
   color: #3ef2c0;
 }
 .sub {
-  margin: 0 0 24px;
+  margin: 0 0 16px;
   color: #7f979c;
   font-size: 14px;
+}
+.accents {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+  color: #9fc3bb;
+  font-size: 13px;
+}
+.swatch {
+  width: 30px;
+  height: 30px;
+  border: 2px solid transparent;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.swatch.cur {
+  border-color: #fff;
 }
 label {
   display: grid;
