@@ -15,14 +15,27 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      # 注意：不要设置 registry-url。setup-node 会向 ~/.npmrc 写入
+      # `//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}` 占位符，npm 会视为
+      # 「已配置凭据」而跳过 OIDC 交换，trusted publishing 会以 404/401 失败。
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          registry-url: 'https://registry.npmjs.org'
           package-manager-cache: false
+
+      # trusted publishing 需要 npm >= 11.5.1（旧版会静默跳过 OIDC 交换）
+      - name: 升级 npm
+        run: npm install -g npm@latest
+
+      # 只写 registry 行、不写 authToken 行：npm 需要 registry 条目发起 OIDC 交换
+      - name: 配置 registry
+        run: npm config set registry https://registry.npmjs.org
 
       - run: npm ci
 
-      - run: npm run build --if-present
+      - name: 测试
+        run: npm test
 
-      - run: npm publish
+      # prepublishOnly 会执行构建；OIDC 交换由 npm 自动完成，provenance 自动附带
+      - name: 发布
+        run: npm publish

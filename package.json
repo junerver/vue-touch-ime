@@ -36,7 +36,7 @@
     "build:types": "vue-tsc --declaration --emitDeclarationOnly --outDir dist -p tsconfig.build.json",
     "test": "vitest run",
     "gen:dict": "python scripts/gen-pinyin-dict.py",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "vue",
