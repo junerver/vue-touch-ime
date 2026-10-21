@@ -1,6 +1,6 @@
 {
   "name": "@junerver/vue-touch-ime",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Vue 3 触摸屏软键盘（内置中文拼音输入法）- 零接线焦点接管、按输入类型限制（数字/小数/文本）、中英数三模式，适配无物理键盘的触屏工控/车载/自助终端",
   "type": "module",
   "main": "./dist/index.cjs",
