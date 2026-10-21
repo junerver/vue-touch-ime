@@ -1,0 +1,88 @@
+{
+  "name": "@junerver/vue-touch-ime",
+  "version": "1.0.0",
+  "description": "Vue 3 触摸屏软键盘（内置中文拼音输入法）- 零接线焦点接管、按输入类型限制（数字/小数/文本）、中英数三模式，适配无物理键盘的触屏工控/车载/自助终端",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./ime": {
+      "types": "./dist/ime.d.ts",
+      "import": "./dist/ime.js",
+      "require": "./dist/ime.cjs"
+    },
+    "./dict": {
+      "types": "./dist/pinyinDict.d.ts",
+      "import": "./dist/pinyinDict.js",
+      "require": "./dist/pinyinDict.cjs"
+    },
+    "./style.css": "./dist/style.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "**/*.css"
+  ],
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && npm run build:types",
+    "build:types": "vue-tsc --declaration --emitDeclarationOnly --outDir dist -p tsconfig.build.json",
+    "test": "vitest run",
+    "gen:dict": "python scripts/gen-pinyin-dict.py",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "vue",
+    "vue3",
+    "keyboard",
+    "soft-keyboard",
+    "touch",
+    "touchscreen",
+    "ime",
+    "pinyin",
+    "chinese",
+    "软键盘",
+    "触摸屏",
+    "输入法",
+    "拼音",
+    "中文输入"
+  ],
+  "author": "junerver",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/junerver/vue-touch-ime.git"
+  },
+  "homepage": "https://github.com/junerver/vue-touch-ime#readme",
+  "bugs": {
+    "url": "https://github.com/junerver/vue-touch-ime/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "vue": "^3.4.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.3",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "@vue/test-utils": "^2.4.6",
+    "@vue/tsconfig": "^0.9.1",
+    "jsdom": "^26.1.0",
+    "typescript": "~6.0.2",
+    "vite": "^8.0.12",
+    "vitest": "^3.2.4",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.8"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
