@@ -39,6 +39,9 @@ export type { SoftCandidate, SoftKbKind, SoftKbMode }
 /** 软键盘接管的输入框类型（checkbox/select 等不接管） */
 const SOFT_INPUT_TYPES = new Set(['text', 'search', 'tel', 'email', 'url', 'number', ''])
 
+/** 打开键盘后延迟再对齐一次草稿的时长（覆盖 focus 之后才写值的写法） */
+const DRAFT_RESYNC_DELAY_MS = 120
+
 export function isSoftInput(el: EventTarget | null): el is HTMLInputElement {
   if (!(el instanceof HTMLInputElement)) return false
   if (el.disabled || el.readOnly) return false
@@ -145,10 +148,33 @@ export function createSoftKeyboard(): SoftKeyboard {
     el?.removeEventListener('input', onTargetInput)
   }
 
+  /**
+   * 打开后再补一次草稿对齐。
+   *
+   * 有些写法里 `<input v-focus v-model="x">` 的指令顺序是「先 focus 后写值」：
+   * Vue 的自定义指令 hook 按模板顺序执行，`el.focus()` 派发 focusin 时
+   * v-model 的 mounted（负责 `el.value = value`）还没跑，此刻读到的值是空的，
+   * 回显就会显示「未输入」。这里在微任务与短延时各对齐一次：
+   * - 微任务：覆盖同一 patch 内晚一步写值的 v-model / nextTick；
+   * - 短延时：覆盖 `setTimeout` 之类再晚一点的赋值。
+   * 用户已经开始按键时草稿与 DOM 相同，syncDraftFromTarget 会自行跳过。
+   */
+  function scheduleDraftResync(el: HTMLInputElement) {
+    if (state.kind === 'text') return
+    const myEpoch = epoch
+    const resync = () => {
+      if (myEpoch !== epoch || target !== el || !state.visible) return
+      syncDraftFromTarget(el)
+    }
+    queueMicrotask(resync)
+    window.setTimeout(resync, DRAFT_RESYNC_DELAY_MS)
+  }
+
   function openFor(el: HTMLInputElement) {
     if (target === el && state.visible) {
       // 同一个输入框再聚焦：值可能已经被外部改过，重新对齐一次回显
       syncDraftFromTarget(el)
+      scheduleDraftResync(el)
       return
     }
     epoch += 1
@@ -167,6 +193,7 @@ export function createSoftKeyboard(): SoftKeyboard {
     state.draft = kind === 'text' ? '' : normalizeDraft(kind, el.value)
     state.visible = true
     listenTarget(el)
+    scheduleDraftResync(el)
     try {
       el.scrollIntoView({ block: 'center' })
     } catch {

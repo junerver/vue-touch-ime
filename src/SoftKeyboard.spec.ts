@@ -245,6 +245,37 @@ describe('createSoftKeyboard · 会话状态', () => {
     expect(el.value).toBe('5.6')
   })
 
+  it('聚焦时值还没写进 DOM（v-focus 在 v-model 之前）：草稿会自动补上', async () => {
+    // 复现 <input v-focus v-model>：自定义指令 mounted 先 focus，
+    // v-model 的 mounted 才把 ref 值写进 el.value → 打开那一刻读到的是空
+    const el = makeInput({ type: 'number', step: '0.1', value: '' })
+    kb.openFor(el)
+    expect(kb.state.draft).toBe('')
+
+    el.value = '506'
+    await Promise.resolve() // 等微任务里的那次对齐
+    expect(kb.state.draft).toBe('506')
+    // 补到值之后，「进场即有值」语义成立：首个数字键整体替换
+    expect(kb.state.replaceAll).toBe(true)
+  })
+
+  it('值在短延时之后才写入也能补上，且不覆盖用户已经按下的内容', async () => {
+    const late = makeInput({ type: 'number', step: '0.1', value: '' })
+    kb.openFor(late)
+    await new Promise((r) => setTimeout(r, 40))
+    late.value = '88' // setTimeout 之后才赋值
+    await new Promise((r) => setTimeout(r, 140))
+    expect(kb.state.draft).toBe('88')
+
+    // 用户先按键：草稿与 DOM 一致，延迟回来的对齐跳过
+    const typed = makeInput({ type: 'number', step: '0.1', value: '' })
+    kb.openFor(typed)
+    kb.press('7')
+    await new Promise((r) => setTimeout(r, 160))
+    expect(kb.state.draft).toBe('7')
+    expect(typed.value).toBe('7')
+  })
+
   it('输入框被卸载后按键安全关闭，不再写值', () => {
     const el = makeInput()
     kb.openFor(el)
