@@ -9,7 +9,10 @@
  *   否则输入框的 @blur 提交会被提前触发；
  * - 数字类输入（type=number）浏览器值消毒会吃掉 "12." 这类中间态，
  *   草稿串由本模块持有，只把合法值落 DOM；
- * - 「进场即全选」的输入（replaceAll）首键整体替换旧值。
+ * - 「进场即全选」的输入（replaceAll）首键整体替换旧值；
+ * - **键盘回显的数字值必须跟着输入框走**：输入框的值可能在 focus 之后才被
+ *   外部写入（行内编辑先 focus 再赋值、v-model 异步回写），所以除了进场读一次，
+ *   还监听目标输入框的 input 事件做双向同步（见 onTargetInput）。
  */
 import { computed, reactive, type ComputedRef } from 'vue'
 
@@ -18,6 +21,7 @@ import {
   backspaceDraft,
   backspaceTextInput,
   candidatesFor,
+  draftToDomValue,
   hasFullSelection,
   insertIntoTextInput,
   isCharAllowed,
@@ -49,7 +53,11 @@ export interface SoftKeyboardState {
   kind: SoftKbKind
   /** 拼音缓冲（不进 input，只在候选栏回显） */
   buffer: string
-  /** 数字类草稿（含尾部未落盘的小数点） */
+  /**
+   * 数字类草稿（含尾部未落盘的小数点）。
+   * 同时就是软键盘「当前值」回显的唯一真源——它始终等于输入框里的值
+   * （或加上尾部那个浏览器存不下的小数点）。
+   */
   draft: string
   /** 首键整体替换（行内编辑进场即全选的输入框） */
   replaceAll: boolean
@@ -88,14 +96,63 @@ export function createSoftKeyboard(): SoftKeyboard {
   let attached = false
   /** 会话代际：focus 移交（A→B 输入框）时旧的延迟关闭不得误伤新会话 */
   let epoch = 0
+  /**
+   * 是否正在由键盘自己写值（写值会派发 input 事件，不能让同步监听把它当成
+   * 「外部改动」回灌进草稿，否则 "5." 这种尾部小数点会被吃掉）。
+   */
+  let selfWriting = false
 
   const candidates = computed<SoftCandidate[]>(() =>
     state.visible && state.mode === 'zh' ? candidatesFor(state.buffer) : [],
   )
 
+  /** 数字类写值：草稿与 DOM 同步落，忽略并发的 input 同步 */
+  function writeDraftToTarget(el: HTMLInputElement, next: string) {
+    state.draft = next
+    selfWriting = true
+    try {
+      writeDraft(el, state.kind, next)
+    } finally {
+      selfWriting = false
+    }
+  }
+
+  /**
+   * 用输入框当前值刷新草稿（键盘回显「当前值」的唯一入口）。
+   *
+   * DOM 值与草稿只差一个尾部小数点时不动：那是键盘故意留在草稿里的中间态。
+   */
+  function syncDraftFromTarget(el: HTMLInputElement) {
+    if (state.kind === 'text') return
+    if (el.value === draftToDomValue(state.kind, state.draft)) return
+    state.draft = normalizeDraft(state.kind, el.value)
+    // 外部塞进来的值（行内编辑先 focus 再赋值、v-model 回写）视同「进场即有值」：
+    // 首个数字键整体替换，符合「点进来就改整段数字」的预期
+    state.replaceAll = state.draft.length > 0
+  }
+
+  /** 目标输入框值被外部改动（脚本赋值 / 粘贴 / 自动填充）时同步回显 */
+  function onTargetInput() {
+    if (!target || selfWriting) return
+    syncDraftFromTarget(target)
+  }
+
+  function listenTarget(el: HTMLInputElement) {
+    el.addEventListener('input', onTargetInput)
+  }
+
+  function unlistenTarget(el: HTMLInputElement | null) {
+    el?.removeEventListener('input', onTargetInput)
+  }
+
   function openFor(el: HTMLInputElement) {
-    if (target === el && state.visible) return
+    if (target === el && state.visible) {
+      // 同一个输入框再聚焦：值可能已经被外部改过，重新对齐一次回显
+      syncDraftFromTarget(el)
+      return
+    }
     epoch += 1
+    unlistenTarget(target)
     target = el
     // data-vti-kb="text|decimal|digits" 显式覆盖属性推断
     const kind = resolveSoftKindWithOverride(el, el.dataset?.vtiKb)
@@ -106,8 +163,10 @@ export function createSoftKeyboard(): SoftKeyboard {
     state.shift = false
     // 「进场即全选」的输入（如行内编辑），首键直接替换
     state.replaceAll = kind === 'text' ? hasFullSelection(el) : el.value.length > 0
-    state.draft = kind === 'text' ? '' : el.value
+    // 数字类：直接把输入框现有数值搬进草稿 → 键盘上立刻能看到"当前值"
+    state.draft = kind === 'text' ? '' : normalizeDraft(kind, el.value)
     state.visible = true
+    listenTarget(el)
     try {
       el.scrollIntoView({ block: 'center' })
     } catch {
@@ -121,6 +180,7 @@ export function createSoftKeyboard(): SoftKeyboard {
     state.buffer = ''
     state.shift = false
     const el = target
+    unlistenTarget(el)
     target = null
     if (blur && el) {
       try {
@@ -147,12 +207,10 @@ export function createSoftKeyboard(): SoftKeyboard {
       insertIntoTextInput(el, text, state.replaceAll)
     } else if (text.length === 1) {
       // 单键走草稿编辑（小数点补 0.、重复小数点忽略等规则在这里）
-      state.draft = applyCharToDraft(state.kind, state.draft, text, state.replaceAll)
-      writeDraft(el, state.kind, state.draft)
+      writeDraftToTarget(el, applyCharToDraft(state.kind, state.draft, text, state.replaceAll))
     } else {
       const base = state.replaceAll ? '' : state.draft
-      state.draft = normalizeDraft(state.kind, base + text)
-      writeDraft(el, state.kind, state.draft)
+      writeDraftToTarget(el, normalizeDraft(state.kind, base + text))
     }
     state.replaceAll = false
   }
@@ -163,8 +221,7 @@ export function createSoftKeyboard(): SoftKeyboard {
     if (state.kind === 'text') {
       backspaceTextInput(el)
     } else {
-      state.draft = backspaceDraft(state.draft, state.replaceAll)
-      writeDraft(el, state.kind, state.draft)
+      writeDraftToTarget(el, backspaceDraft(state.draft, state.replaceAll))
     }
     state.replaceAll = false
   }

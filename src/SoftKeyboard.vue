@@ -10,11 +10,12 @@
  * - stopPropagation 拦住文档层的「点外部关闭」（下拉、popover）。
  *
  * 拼音模式：字母进候选缓冲，空格/点候选上屏；数字/标点直接上屏。
- * 数字模式：decimal 类型出小数点，digits 类型不出。
+ * 数字模式：decimal 类型出小数点，digits 类型不出；**回显条显示输入框里的
+ * 当前数值**（整段），输入框被键盘挡住也能看清、直接整段改。
  *
  * 主题：`accent` / `background` prop 快捷换肤（派生色自动跟随），
  * 其余细节覆盖 `.vti-kb` 上的 CSS 变量（--vti-key-h / --vti-key-radius /
- * --vti-font 等）。
+ * --vti-font / --vti-panel-w 等）。
  */
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
@@ -97,26 +98,39 @@ function backLabel(): string {
     @contextmenu.prevent
   >
     <div class="vti-kb__panel">
-      <!-- 编辑回显：拼音缓冲 / 数字草稿（含未落盘的小数点） -->
+      <!--
+        顶部回显条。
+        文本类：拼音缓冲 + 候选；
+        数字类：**当前值**（输入框里的完整数值）——现场输入框常被键盘自身挡住，
+        把整段数值搬到这里就能看清、直接改（首个数字键整体替换）。
+      -->
       <div class="vti-kb__strip">
-        <span class="vti-kb__buffer">
-          {{ kb.state.mode === "zh" ? kb.state.buffer : kb.state.draft }}
-        </span>
-        <div v-if="kb.state.mode === 'zh'" class="vti-kb__cands">
-          <button
-            v-for="(cand, index) in candidates"
-            :key="`${cand.consumed}-${cand.text}-${index}`"
-            type="button"
-            class="vti-kb__cand"
-            @pointerdown="onPick($event, cand)"
-          >
-            {{ cand.text }}
-          </button>
-          <span v-if="candidates.length === 0" class="vti-kb__hint">候选</span>
-        </div>
-        <span v-else class="vti-kb__hint">
-          {{ kb.state.kind === "text" ? "英文/数字" : kb.state.kind === "decimal" ? "数字 · 小数" : "数字" }}
-        </span>
+        <template v-if="kb.state.kind === 'text'">
+          <span class="vti-kb__buffer">{{ kb.state.buffer }}</span>
+          <div v-if="kb.state.mode === 'zh'" class="vti-kb__cands">
+            <button
+              v-for="(cand, index) in candidates"
+              :key="`${cand.consumed}-${cand.text}-${index}`"
+              type="button"
+              class="vti-kb__cand"
+              @pointerdown="onPick($event, cand)"
+            >
+              {{ cand.text }}
+            </button>
+            <span v-if="candidates.length === 0" class="vti-kb__hint">候选</span>
+          </div>
+          <span v-else class="vti-kb__hint">英文/数字</span>
+        </template>
+
+        <template v-else>
+          <span class="vti-kb__label">当前值</span>
+          <span class="vti-kb__value" :class="{ 'is-empty': !kb.state.draft }">
+            {{ kb.state.draft || "未输入" }}
+          </span>
+          <span class="vti-kb__hint">
+            {{ kb.state.kind === "decimal" ? "数字 · 小数" : "数字" }}
+          </span>
+        </template>
       </div>
 
       <!-- 字母区（拼音 / 英文） -->
@@ -267,6 +281,9 @@ function backLabel(): string {
   --vti-key-h: 54px;
   --vti-key-radius: 10px;
   --vti-font: "Microsoft YaHei", "Noto Sans SC", Arial, sans-serif;
+  /* 面板宽度：触摸屏上整宽铺满会吃掉半屏内容，默认只占中间一条。
+   * 需要更宽/更窄时在 .vti-kb 上覆盖这个变量即可（--vti-panel-w: 960px）。 */
+  --vti-panel-w: 820px;
 
   position: fixed;
   left: 0;
@@ -285,7 +302,7 @@ function backLabel(): string {
   transition:
     transform 0.18s ease,
     visibility 0s linear 0.18s;
-  max-width: 1120px;
+  max-width: var(--vti-panel-w);
   margin: 0 auto;
   padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
   border: 1px solid var(--vti-panel-border);
@@ -311,9 +328,9 @@ function backLabel(): string {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 46px;
+  min-height: 48px;
   margin-bottom: 8px;
-  padding: 4px 10px;
+  padding: 4px 12px;
   border: 1px solid var(--vti-strip-border);
   border-radius: 9px;
   background: var(--vti-strip-bg);
@@ -328,6 +345,35 @@ function backLabel(): string {
   letter-spacing: 0.06em;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* ── 数字类的「当前值」回显 ──
+ * 输入框经常正好被键盘自己挡住，把整段数值放大搬到回显条上，
+ * 让操作员不用挪动页面也能看清并整段改。 */
+.vti-kb__label {
+  flex: none;
+  color: var(--vti-muted-fg);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+.vti-kb__value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vti-buffer-fg);
+  font: 700 24px/1.15 Consolas, "Courier New", monospace;
+  letter-spacing: 0.04em;
+  text-align: right;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* 空值时给一句说明，别让回显条看着像坏了 */
+.vti-kb__value.is-empty {
+  color: var(--vti-muted-fg);
+  font: 600 16px/1.15 var(--vti-font);
+  letter-spacing: 0.02em;
 }
 .vti-kb__cands {
   flex: 1;

@@ -217,6 +217,34 @@ describe('createSoftKeyboard · 会话状态', () => {
     expect(kb.getTarget()).toBe(b)
   })
 
+  it('数字输入：回显草稿取输入框当前值，外部改值也能跟上', () => {
+    const el = makeInput({ type: 'number', step: '0.1', value: '480.5' })
+    kb.openFor(el)
+    expect(kb.state.draft).toBe('480.5')
+
+    // 行内编辑「先 focus 后赋值」：focus 之后外部才把值写进来
+    el.value = '1200'
+    el.dispatchEvent(new Event('input', { bubbles: true }))
+    expect(kb.state.draft).toBe('1200')
+
+    // 外部塞进来的值视同「进场即有值」：首个数字键整体替换
+    kb.press('9')
+    expect(el.value).toBe('9')
+    expect(kb.state.draft).toBe('9')
+  })
+
+  it('键盘自己写值不会被外部同步监听回灌（尾部小数点保留）', () => {
+    const el = makeInput({ type: 'number', step: '0.1', value: '' })
+    kb.openFor(el)
+    kb.press('5')
+    kb.press('.')
+    // DOM 里只能是 "5"，草稿才是 "5."
+    expect(el.value).toBe('5')
+    expect(kb.state.draft).toBe('5.')
+    kb.press('6')
+    expect(el.value).toBe('5.6')
+  })
+
   it('输入框被卸载后按键安全关闭，不再写值', () => {
     const el = makeInput()
     kb.openFor(el)
@@ -313,6 +341,32 @@ describe('SoftKeyboard.vue · 组件', () => {
     await wrapper2.vm.$nextTick()
     const dot = wrapper2.findAll('.vti-kb__key').find((k) => k.text().trim() === '·')
     expect(dot?.attributes('disabled')).toBeDefined()
+    wrapper2.unmount()
+  })
+
+  it('数字键盘回显「当前值」：有值放大显示，空值给「未输入」', async () => {
+    const wrapper = mount(SoftKeyboardVue, { attachTo: document.body })
+    const el = makeInput({ type: 'number', step: '0.1', value: '480' })
+    focusIn(el)
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.find('.vti-kb__label').text()).toBe('当前值')
+    expect(wrapper.find('.vti-kb__value').text()).toBe('480')
+    expect(wrapper.find('.vti-kb__value').classes()).not.toContain('is-empty')
+
+    // 按键后回显跟着走
+    const key = wrapper.findAll('.vti-kb__key').find((k) => k.text().trim() === '7')!
+    pointerDown(key.element)
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.vti-kb__value').text()).toBe('7')
+    wrapper.unmount()
+
+    const wrapper2 = mount(SoftKeyboardVue, { attachTo: document.body })
+    const empty = makeInput({ type: 'number', value: '' })
+    focusIn(empty)
+    await wrapper2.vm.$nextTick()
+    expect(wrapper2.find('.vti-kb__value').text()).toBe('未输入')
+    expect(wrapper2.find('.vti-kb__value').classes()).toContain('is-empty')
     wrapper2.unmount()
   })
 
